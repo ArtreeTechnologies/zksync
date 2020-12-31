@@ -83,12 +83,12 @@ describe(`ZkSync integration tests (token: ${token}, transport: ${transport})`, 
         // await tester.testFailedBatch(alice, bob, token, TX_AMOUNT);
     });
 
-    step('should execute a withdrawal', async () => {
-        await tester.testVerifiedWithdraw(alice, token, TX_AMOUNT);
+    step('should execute a withdrawal', async (done) => {
+        await tester.testVerifiedWithdraw(alice, token, TX_AMOUNT).catch(done);
     });
 
-    step('should execute a ForcedExit', async () => {
-        await tester.testVerifiedForcedExit(alice, bob, token);
+    step('should execute a ForcedExit', async (done) => {
+        await tester.testVerifiedForcedExit(alice, bob, token).catch(done);
     });
 
     it('should check collected fees', async () => {
