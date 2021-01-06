@@ -26,7 +26,9 @@ struct Opt {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    log::info!("Server is started");
     env_logger::init();
+    log::info!("Env logger inited");
     let opt = Opt::from_args();
 
     let server_mode = if opt.genesis {
@@ -34,6 +36,7 @@ async fn main() -> anyhow::Result<()> {
     } else {
         ServerCommand::Launch
     };
+    log::info!("Command genesis and launched");
 
     if let ServerCommand::Genesis = server_mode {
         log::info!("Performing the server genesis initialization");

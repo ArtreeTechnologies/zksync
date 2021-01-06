@@ -11,11 +11,10 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 
 FROM debian:buster-slim
 RUN apt-get update && apt-get install -y libpq5 ca-certificates postgresql && rm -rf /var/lib/apt/lists/*
-ENV POSTGRES_PASSWORD="password"
 EXPOSE 3000
 EXPOSE 3031
 EXPOSE 3030
 COPY --from=builder /usr/src/zksync/target/release/zksync_server /usr/bin
 COPY contracts/build/ /contracts/build/
 COPY docker/server/wait_postgres.sh .
-ENTRYPOINT ["sh", "wait_postgres.sh", "postgres", "zksync_server"]
+ENTRYPOINT ["sh", "wait_postgres.sh", "postgres", "sleep", "5000"]
