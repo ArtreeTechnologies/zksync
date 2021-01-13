@@ -17,4 +17,5 @@ EXPOSE 3030
 COPY --from=builder /usr/src/zksync/target/release/zksync_server /usr/bin
 COPY contracts/build/ /contracts/build/
 COPY docker/server/wait_postgres.sh .
+COPY docker/server/localhost.json /etc/tokens/localhost.json
 ENTRYPOINT ["sh", "wait_postgres.sh", "postgres", "sleep", "5000"]
