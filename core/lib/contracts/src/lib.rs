@@ -22,6 +22,7 @@ pub fn zksync_contract() -> Contract {
         .get("abi")
         .expect("couldn't get abi from ZKSYNC_CONTRACT_FILE")
         .to_string();
+    println!("{:?}", abi_string);
     Contract::load(abi_string.as_bytes()).expect("zksync contract abi")
 }
 

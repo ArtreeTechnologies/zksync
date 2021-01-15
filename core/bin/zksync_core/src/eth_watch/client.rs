@@ -60,6 +60,9 @@ pub struct EthHttpClient {
 
 impl EthHttpClient {
     pub fn new(web3: Web3<Http>, zksync_contract_addr: H160) -> Self {
+        println!("{:?}", web3);
+        println!("{:?}", zksync_contract_addr);
+        println!("{:?}", zksync_contract());
         let zksync_contract = Contract::new(web3.eth(), zksync_contract_addr, zksync_contract());
 
         let topics = ContractTopics::new(zksync_contract.abi());
