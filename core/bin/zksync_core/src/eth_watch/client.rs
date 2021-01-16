@@ -60,12 +60,12 @@ pub struct EthHttpClient {
 
 impl EthHttpClient {
     pub fn new(web3: Web3<Http>, zksync_contract_addr: H160) -> Self {
-        println!("{:?}", web3);
-        println!("{:?}", zksync_contract_addr);
-        println!("{:?}", zksync_contract());
+        // println!("{:?}", zksync_contract());
         let zksync_contract = Contract::new(web3.eth(), zksync_contract_addr, zksync_contract());
+        println!("finish contract new");
 
         let topics = ContractTopics::new(zksync_contract.abi());
+        println!("finish topics init");
         Self {
             zksync_contract,
             web3,
@@ -83,12 +83,14 @@ impl EthHttpClient {
         T: TryFrom<Log>,
         T::Error: Debug,
     {
+        println!("getting event start");
         let filter = FilterBuilder::default()
             .address(vec![self.zksync_contract.address()])
             .from_block(from)
             .to_block(to)
             .topics(Some(topics), None, None, None)
             .build();
+        println!("filter is here {:?}", filter);
 
         self.web3
             .eth()
@@ -124,16 +126,18 @@ impl EthClient for EthHttpClient {
         from: BlockNumber,
         to: BlockNumber,
     ) -> anyhow::Result<Vec<CompleteWithdrawalsTx>> {
+        println!("get complete withdraw start");
         let start = Instant::now();
 
         let result = self
             .get_events(from, to, vec![self.topics.complete_withdrawals_event])
             .await;
-
+        println!("got event");
         metrics::histogram!(
             "eth_watcher.get_complete_withdrawals_event",
             start.elapsed()
         );
+        println!("result is here{:?}", result);
         result
     }
 
