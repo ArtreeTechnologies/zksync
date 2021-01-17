@@ -20,7 +20,7 @@ ENV BLOCK_CHUNK_SIZES 6,30
 ENV KEY_DIR keys/plonk-975ae851
 ENV ACCOUNT_TREE_DEPTH 32
 ENV BALANCE_TREE_DEPTH 11
-ENV PROVER_SERVER_URL http://127.0.0.1:8088
+ENV PROVER_SERVER_URL http://operator:8088
 ENV REQ_SERVER_TIMEOUT 10
 ENV RUST_BACKTRACE 1
 ENV RUST_LOG "zksync_api=debug,zksync_core=debug,zksync_eth_sender=debug,zksync_witness_generator=debug,zksync_server=debug,zksync_prover=debug,dummy_prover=info,key_generator=info,zksync_data_restore=info,zksync_eth_client=info,zksync_storage=info,zksync_state=info,zksync_types=info,exodus_test=info,loadtest=info,kube=debug,dev_ticker=info,block_sizes_test=info,zksync_config=debug"
