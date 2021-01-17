@@ -58,5 +58,4 @@ VERIFY_KEYS_TARBAL="verify-keys-`basename $KEY_DIR`-account-"$ACCOUNT_TREE_DEPTH
 tar xf keys/packed/$VERIFY_KEYS_TARBAL
 echo Keys unpacked, starting prover
 
-exec sleep 5000
-# plonk_step_by_step_prover "$PROVER_NAME" 2>&1
+plonk_step_by_step_prover "$PROVER_NAME" 2>&1
