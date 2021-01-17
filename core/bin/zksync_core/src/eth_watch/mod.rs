@@ -140,6 +140,7 @@ impl<W: EthClient, S: Storage> EthWatch<W, S> {
         previous_block_with_accepted_events: u64,
         new_block_with_accepted_events: u64,
     ) -> anyhow::Result<()> {
+        println!("update withdraw start");
         // Get new complete withdrawals events
         let complete_withdrawals_txs = self
             .client
@@ -148,10 +149,11 @@ impl<W: EthClient, S: Storage> EthWatch<W, S> {
                 BlockNumber::Number(new_block_with_accepted_events.into()),
             )
             .await?;
-
+        println!("complete withdraw finish");
         self.storage
             .store_complete_withdrawals(complete_withdrawals_txs)
             .await?;
+        println!("store storage");
         Ok(())
     }
 
@@ -174,11 +176,14 @@ impl<W: EthClient, S: Storage> EthWatch<W, S> {
     }
 
     async fn restore_state_from_eth(&mut self, last_ethereum_block: u64) -> anyhow::Result<()> {
+        println!("start restore state");
         let (unconfirmed_queue, priority_queue) = self
             .update_eth_state(last_ethereum_block, PRIORITY_EXPIRATION)
             .await?;
+        println!("success update state");
 
         let new_state = ETHState::new(last_ethereum_block, unconfirmed_queue, priority_queue);
+        println!("success init state");
 
         self.set_new_state(new_state);
         log::trace!("ETH state: {:#?}", self.eth_state);
@@ -192,16 +197,20 @@ impl<W: EthClient, S: Storage> EthWatch<W, S> {
     ) -> anyhow::Result<(Vec<PriorityOp>, HashMap<u64, ReceivedPriorityOp>)> {
         let new_block_with_accepted_events =
             current_ethereum_block.saturating_sub(self.number_of_confirmations_for_event);
+        println!("success current ethereum block");
         let previous_block_with_accepted_events =
             new_block_with_accepted_events.saturating_sub(depth_of_last_approved_block);
+        println!("success previous block accepted");
 
         self.update_withdrawals(
             previous_block_with_accepted_events,
             new_block_with_accepted_events,
         )
         .await?;
+        println!("success update withdrawals");
 
         let unconfirmed_queue = self.get_unconfirmed_ops(current_ethereum_block).await?;
+        println!("success unconfirmed queue");
         let priority_queue = self
             .client
             .get_priority_op_events(
@@ -212,6 +221,7 @@ impl<W: EthClient, S: Storage> EthWatch<W, S> {
             .into_iter()
             .map(|priority_op| (priority_op.serial_id, priority_op.into()))
             .collect();
+        println!("success priority queue");
 
         Ok((unconfirmed_queue, priority_queue))
     }
