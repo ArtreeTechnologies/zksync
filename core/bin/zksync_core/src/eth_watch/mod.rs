@@ -197,10 +197,8 @@ impl<W: EthClient, S: Storage> EthWatch<W, S> {
     ) -> anyhow::Result<(Vec<PriorityOp>, HashMap<u64, ReceivedPriorityOp>)> {
         let new_block_with_accepted_events =
             current_ethereum_block.saturating_sub(self.number_of_confirmations_for_event);
-        println!("success current ethereum block");
         let previous_block_with_accepted_events =
             new_block_with_accepted_events.saturating_sub(depth_of_last_approved_block);
-        println!("success previous block accepted");
 
         self.update_withdrawals(
             previous_block_with_accepted_events,
@@ -221,6 +219,7 @@ impl<W: EthClient, S: Storage> EthWatch<W, S> {
             .into_iter()
             .map(|priority_op| (priority_op.serial_id, priority_op.into()))
             .collect();
+        println!("{:?}", priority_queue);
         println!("success priority queue");
 
         Ok((unconfirmed_queue, priority_queue))
