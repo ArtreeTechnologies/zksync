@@ -1,4 +1,5 @@
 *
+!contracts/build
 !docker/prover/prover-entry.sh
 !docker/prover/plonk-download.sh
 !docker/prover/tar-key.sh
