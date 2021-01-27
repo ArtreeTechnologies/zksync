@@ -12,7 +12,6 @@ EXPOSE 3000
 EXPOSE 3031
 EXPOSE 3030
 EXPOSE 8088
-COPY contracts/build/ /contracts/build/
 COPY docker/server/ .
 RUN touch /etc/tokens/localhost.json
 RUN echo "[]" > /etc/tokens/localhost.json
