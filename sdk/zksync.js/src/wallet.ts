@@ -11,7 +11,6 @@ import {
     PriorityOperationReceipt,
     TransactionReceipt,
     PubKeyHash,
-    TxEthSignature,
     ChangePubKey,
     EthSignerType,
     SignedTransaction,
@@ -22,14 +21,18 @@ import {
     IERC20_INTERFACE,
     isTokenETH,
     MAX_ERC20_APPROVE_AMOUNT,
-    getChangePubkeyMessage,
     SYNC_MAIN_CONTRACT_INTERFACE,
-    getSignedBytesFromMessage,
-    signMessagePersonalAPI,
     ERC20_DEPOSIT_GAS_LIMIT,
-    getEthSignatureType,
-    serializeTransfer
+    serializeTransfer,
+    syncContractAbi
 } from './utils';
+import web3, {
+    composeTransaction,
+    composeTransactionWithValue,
+    sendTransaction,
+    finalize
+} from './web3'
+import { sign } from 'crypto';
 
 const EthersErrorCode = ErrorCode;
 
@@ -431,15 +434,15 @@ export class Wallet {
     }
 
     async isOnchainAuthSigningKeySet(nonce: Nonce = 'committed'): Promise<boolean> {
-        const mainZkSyncContract = new Contract(
-            this.provider.contractAddress.mainContract,
-            SYNC_MAIN_CONTRACT_INTERFACE,
-            this.ethSigner
+        const mainZkSyncContract = new web3.eth.Contract(
+            syncContractAbi,
+            this.provider.contractAddress.mainContract
         );
+
 
         const numNonce = await this.getNonce(nonce);
         try {
-            const onchainAuthFact = await mainZkSyncContract.authFacts(this.address(), numNonce);
+            const onchainAuthFact = await mainZkSyncContract.methods.authFacts(this.address(), numNonce).call();
             return onchainAuthFact !== '0x0000000000000000000000000000000000000000000000000000000000000000';
         } catch (e) {
             this.modifyEthersError(e);
@@ -447,9 +450,8 @@ export class Wallet {
     }
 
     async onchainAuthSigningKey(
-        nonce: Nonce = 'committed',
-        ethTxOptions?: ethers.providers.TransactionRequest
-    ): Promise<ContractTransaction> {
+        nonce: Nonce = 'committed'
+    ) {
         if (!this.signer) {
             throw new Error('ZKSync signer is required for current pubkey calculation.');
         }
@@ -463,17 +465,17 @@ export class Wallet {
 
         const numNonce = await this.getNonce(nonce);
 
-        const mainZkSyncContract = new Contract(
-            this.provider.contractAddress.mainContract,
-            SYNC_MAIN_CONTRACT_INTERFACE,
-            this.ethSigner
+        const mainZkSyncContract = new web3.eth.Contract(
+            syncContractAbi,
+            this.provider.contractAddress.mainContract
         );
 
         try {
-            return mainZkSyncContract.setAuthPubkeyHash(newPubKeyHash.replace('sync:', '0x'), numNonce, {
-                gasLimit: BigNumber.from('200000'),
-                ...ethTxOptions
-            });
+            const rawContractTx = await mainZkSyncContract.methods.setAuthPubkeyHash(newPubKeyHash.replace('sync:', '0x'), numNonce);
+            const signedTx = await this.signTransactionObject(this.provider.contractAddress.mainContract, rawContractTx.encodeABI())
+            const txResult = await sendTransaction("eth_sendRawTransaction", [signedTx]) as any
+            await finalize()
+            await web3.eth.getTransactionReceipt(txResult.result)
         } catch (e) {
             this.modifyEthersError(e);
         }
@@ -574,28 +576,26 @@ export class Wallet {
     async depositToSyncFromEthereum(deposit: {
         depositTo: Address;
         token: TokenLike;
-        amount: BigNumberish;
+        amount: BigNumber;
         ethTxOptions?: ethers.providers.TransactionRequest;
         approveDepositAmountForERC20?: boolean;
     }): Promise<ETHOperation> {
         const gasPrice = await this.ethSigner.provider.getGasPrice();
 
-        const mainZkSyncContract = new Contract(
-            this.provider.contractAddress.mainContract,
-            SYNC_MAIN_CONTRACT_INTERFACE,
-            this.ethSigner
+        const mainZkSyncContract = new web3.eth.Contract(
+            syncContractAbi,
+            this.provider.contractAddress.mainContract
         );
 
         let ethTransaction;
 
         if (isTokenETH(deposit.token)) {
             try {
-                ethTransaction = await mainZkSyncContract.depositETH(deposit.depositTo, {
-                    value: BigNumber.from(deposit.amount),
-                    gasLimit: BigNumber.from('200000'),
-                    gasPrice,
-                    ...deposit.ethTxOptions
-                });
+                const rawContractTx = await mainZkSyncContract.methods.depositETH(deposit.depositTo);
+                const signedTx = await composeTransactionWithValue(rawContractTx.encodeABI(), this.provider.contractAddress.mainContract, deposit.amount)
+                const txResult = await sendTransaction("eth_sendRawTransaction", [signedTx.rawTransaction]) as any
+                await finalize()
+                ethTransaction = await web3.eth.getTransactionReceipt(txResult.result)
             } catch (e) {
                 this.modifyEthersError(e);
             }
@@ -630,7 +630,7 @@ export class Wallet {
             const txRequest = args[args.length - 1] as ethers.providers.TransactionRequest;
             if (txRequest.gasLimit == null) {
                 try {
-                    const gasEstimate = await mainZkSyncContract.estimateGas.depositERC20(...args).then(
+                    const gasEstimate = await mainZkSyncContract.methods.estimateGas.depositERC20(...args).then(
                         (estimate) => estimate,
                         (_err) => BigNumber.from('0')
                     );
@@ -644,7 +644,7 @@ export class Wallet {
             }
 
             try {
-                ethTransaction = await mainZkSyncContract.depositERC20(...args);
+                ethTransaction = await mainZkSyncContract.methods.depositERC20(...args);
             } catch (e) {
                 this.modifyEthersError(e);
             }
@@ -658,7 +658,6 @@ export class Wallet {
         accountId?: number;
         ethTxOptions?: ethers.providers.TransactionRequest;
     }): Promise<ETHOperation> {
-        const gasPrice = await this.ethSigner.provider.getGasPrice();
         const ethProxy = new ETHProxy(this.ethSigner.provider, this.provider.contractAddress);
 
         let accountId: number;
@@ -674,23 +673,34 @@ export class Wallet {
             accountId = accountState.id;
         }
 
-        const mainZkSyncContract = new Contract(
-            ethProxy.contractAddress.mainContract,
-            SYNC_MAIN_CONTRACT_INTERFACE,
-            this.ethSigner
+        const mainZkSyncContract = new web3.eth.Contract(
+            syncContractAbi,
+            ethProxy.contractAddress.mainContract
         );
 
         const tokenAddress = this.provider.tokenSet.resolveTokenAddress(withdraw.token);
         try {
-            const ethTransaction = await mainZkSyncContract.fullExit(accountId, tokenAddress, {
-                gasLimit: BigNumber.from('500000'),
-                gasPrice,
-                ...withdraw.ethTxOptions
-            });
-            return new ETHOperation(ethTransaction, this.provider);
+            const rawContractTx = await mainZkSyncContract.methods.fullExit(accountId, tokenAddress);
+            const signedTx = await this.signTransactionObject(ethProxy.contractAddress.mainContract, rawContractTx.encodeABI())
+            const txResult = await sendTransaction("eth_sendRawTransaction", [signedTx]) as any
+            await finalize()
+            const txReceipt = await web3.eth.getTransactionReceipt(txResult.result) as any
+            return new ETHOperation(txReceipt, this.provider);
         } catch (e) {
             this.modifyEthersError(e);
         }
+    }
+
+    async signTransactionObject(toAddr: string, data: string) {
+        return await this.ethSigner.signTransaction({
+            to: toAddr,
+            from: this.address(),
+            gasLimit: 850000,
+            gasPrice: 90000,
+            value: "0x",
+            data: data,
+            nonce: await web3.eth.getTransactionCount(this.address())
+        })
     }
 
     private modifyEthersError(error: any): never {
@@ -723,19 +733,33 @@ export class Wallet {
     }
 }
 
+interface TxReceipt {
+    transactionHash: string,
+    transactionIndex: number,
+    blockHash: string,
+    blockNumber: number,
+    from: string,
+    to: string,
+    gasUsed: number,
+    cumulativeGasUsed: number,
+    contractAddress: string | null,
+    logs: any[],
+    status: boolean,
+    logsBloom: string
+  }
+
 class ETHOperation {
     state: 'Sent' | 'Mined' | 'Committed' | 'Verified' | 'Failed';
     error?: ZKSyncTxError;
     priorityOpId?: BigNumber;
 
-    constructor(public ethTx: ContractTransaction, public zkSyncProvider: Provider) {
+    constructor(public ethTx: TxReceipt, public zkSyncProvider: Provider) {
         this.state = 'Sent';
     }
 
     async awaitEthereumTxCommit() {
         if (this.state !== 'Sent') return;
-
-        const txReceipt = await this.ethTx.wait();
+        const txReceipt = this.ethTx;
         for (const log of txReceipt.logs) {
             try {
                 const priorityQueueLog = SYNC_MAIN_CONTRACT_INTERFACE.parseLog(log);
@@ -754,7 +778,6 @@ class ETHOperation {
 
     async awaitReceipt(): Promise<PriorityOperationReceipt> {
         this.throwErrorIfFailedState();
-
         await this.awaitEthereumTxCommit();
         if (this.state !== 'Mined') return;
         const receipt = await this.zkSyncProvider.notifyPriorityOp(this.priorityOpId.toNumber(), 'COMMIT');
