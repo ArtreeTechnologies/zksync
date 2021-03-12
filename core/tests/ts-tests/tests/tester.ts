@@ -2,12 +2,15 @@ import * as ethers from 'ethers';
 import * as zksync from 'zksync';
 import * as fs from 'fs';
 import * as path from 'path';
+import { composeTransactionWithValue } from './web3'
+import { finalize, sendTransaction } from '../../../../sdk/zksync.js/src/web3'
 
 const franklin_abi = require('../../../../contracts/build/ZkSync.json').abi;
 type Network = 'localhost' | 'rinkeby' | 'ropsten';
 
 const testConfigPath = path.join(process.env.ZKSYNC_HOME as string, `etc/test_config/constant`);
 const ethTestConfig = JSON.parse(fs.readFileSync(`${testConfigPath}/eth.json`, { encoding: 'utf-8' }));
+const networkHost = process.env.OPERATOR_HOST
 
 export class Tester {
     public contract: ethers.Contract;
@@ -24,34 +27,33 @@ export class Tester {
     }
 
     // prettier-ignore
-    static async init(network: Network, transport: 'WS' | 'HTTP') {
-        const ethProvider = network == 'localhost' 
-            ? new ethers.providers.JsonRpcProvider(process.env.WEB3_URL)
-            : ethers.getDefaultProvider(network);
-        if (network == 'localhost') {
+    static async init() {
+        const ethProvider = new ethers.providers.JsonRpcProvider(process.env.WEB3_URL)
+        if (networkHost == 'localhost') {
             ethProvider.pollingInterval = 100;
         }
-        const syncProvider = await zksync.getDefaultProvider(network, transport);
+        const syncProvider = await await zksync.Provider.newHttpProvider(`http://${networkHost}:3030`);
         const ethWallet = ethers.Wallet.fromMnemonic(
-            ethTestConfig.test_mnemonic as string, 
+            ethTestConfig.test_mnemonic as string,
             "m/44'/60'/0'/0/0"
         ).connect(ethProvider);
         const syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
-        return new Tester(network, ethProvider, syncProvider, ethWallet, syncWallet);
+        return new Tester(networkHost, ethProvider, syncProvider, ethWallet, syncWallet);
     }
 
     async disconnect() {
         await this.syncProvider.disconnect();
     }
 
-    async fundedWallet(amount: string) {
+    async fundedWallet() {
+        const gwei = ethers.BigNumber.from(1000000000)
+        const ether = gwei.mul(100000000)
+        const unit = ethers.BigNumber.from(10)
         const newWallet = ethers.Wallet.createRandom().connect(this.ethProvider);
         const syncWallet = await zksync.Wallet.fromEthSigner(newWallet, this.syncProvider);
-        const handle = await this.ethWallet.sendTransaction({
-            to: newWallet.address,
-            value: ethers.utils.parseEther(amount)
-        });
-        await handle.wait();
+        const tx = await composeTransactionWithValue('0x', newWallet.address, ether.mul(unit));
+        await sendTransaction("eth_sendRawTransaction", [tx.rawTransaction]) as any
+        await finalize();
         return syncWallet;
     }
 
