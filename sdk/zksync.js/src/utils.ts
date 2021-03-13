@@ -206,7 +206,7 @@ export function isTransactionFeePackable(amount: BigNumberish): boolean {
     return closestPackableTransactionFee(amount).eq(amount);
 }
 
-export function buffer2bitsBE(buff) {
+export function buffer2bitsBE(buff: any) {
     const res = new Array(buff.length * 8);
     for (let i = 0; i < buff.length; i++) {
         const b = buff[i];

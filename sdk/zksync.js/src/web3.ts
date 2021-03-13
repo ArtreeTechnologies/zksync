@@ -15,7 +15,7 @@ const sendTransaction = async (method: string, params: any[]) => {
             method,
             params,
         },
-        (e, r) => {
+        (e: any, r: any) => {
             if (e) reject(e)
             else resolve(r)
         }

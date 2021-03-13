@@ -77,13 +77,12 @@ export async function createAndFinalizeBlock(web3: Web3) {
 }
 
 export function describeWithFrontier(title: string, cb: (context: { web3: Web3 }) => void, provider?: string) {
+	const web3 = new Web3(`http://substrate:${RPC_PORT}`)
 	describe(title, () => {
-		let context: { web3: Web3 } = { web3: null };
+		let context: { web3: Web3 } = { web3: web3 };
 		// Making sure the Frontier node has started
 		before("Starting Frontier Test Node", async function () {
 			this.timeout(SPAWNING_TIME);
-			const web3 = new Web3(`http://substrate:${RPC_PORT}`)
-			context.web3 = web3;
 		});
 
 		cb(context);
